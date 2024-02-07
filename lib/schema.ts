@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export interface Database {
@@ -160,3 +161,5 @@ export type Enums<
   : PublicEnumNameOrOptions extends keyof Database["public"]["Enums"]
     ? Database["public"]["Enums"][PublicEnumNameOrOptions]
     : never;
+=======
+>>>>>>> 7b2daf3a1eb5e9646e5544425fd0e6c0a686dce8
