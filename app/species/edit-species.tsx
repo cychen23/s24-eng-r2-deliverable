@@ -1,16 +1,18 @@
 "use client";
-
+/*
+Note: "use client" is a Next.js App Router directive that tells React to render the component as
+a client component rather than a server component. This establishes the server-client boundary,
+providing access to client-side functionality such as hooks and event handlers to this component and
+any of its imported children. Although the SpeciesCard component itself does not use any client-side
+functionality, it is beneficial to move it to the client because it is rendered in a list with a unique
+key prop in species/page.tsx. When multiple component instances are rendered from a list, React uses the unique key prop
+on the client-side to correctly match component state and props should the order of the list ever change.
+React server components don't track state between rerenders, so leaving the uniquely identified components (e.g. SpeciesCard)
+can cause errors with matching props and state in child components if the list order changes.
+*/
 import { Icons } from "@/components/icons";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,13 +20,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/use-toast";
 import { createBrowserSupabaseClient } from "@/lib/client-utils";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { DialogDescription } from "@radix-ui/react-dialog";
 import { useRouter } from "next/navigation";
 import { useState, type BaseSyntheticEvent } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-
-// We use zod (z) to define a schema for the "Add species" form.
-// zod handles validation of the input values with methods like .string(), .nullable(). It also processes the form inputs with .transform() before the inputs are sent to the database.
+type animals = Database["species"]["Tables"]["profiles"]["Row"];
 
 // Define kingdom enum for use in Zod schema and displaying dropdown options in the form
 const kingdoms = z.enum(["Animalia", "Plantae", "Fungi", "Protista", "Archaea", "Bacteria"]);
@@ -58,13 +59,6 @@ const speciesSchema = z.object({
 
 type FormData = z.infer<typeof speciesSchema>;
 
-// Default values for the form fields.
-/* Because the react-hook-form (RHF) used here is a controlled form (not an uncontrolled form),
-fields that are nullable/not required should explicitly be set to `null` by default.
-Otherwise, they will be `undefined` by default, which will raise warnings because `undefined` conflicts with controlled components.
-All form fields should be set to non-undefined default values.
-Read more here: https://legacy.react-hook-form.com/api/useform/
-*/
 const defaultValues: Partial<FormData> = {
   scientific_name: "",
   common_name: null,
@@ -74,7 +68,7 @@ const defaultValues: Partial<FormData> = {
   description: null,
 };
 
-export default function AddSpeciesDialog({ userId }: { userId: string }) {
+export default function SpeciesCard({ userId }: { userId: string }) {
   const router = useRouter();
 
   // Control open/closed state of the dialog
@@ -91,17 +85,26 @@ export default function AddSpeciesDialog({ userId }: { userId: string }) {
     // The `input` prop contains data that has already been processed by zod. We can now use it in a supabase query
     const supabase = createBrowserSupabaseClient();
 
-    const { error } = await supabase.from("species").insert([
-      {
-        author: userId,
+    // Updates the dataset based on inputted information and whether conditions are met. Returns object of all rows that fulfill conditions
+    const { data: data, error } = await supabase
+      .from("species")
+      .update({
         common_name: input.common_name,
         description: input.description,
         kingdom: input.kingdom,
-        scientific_name: input.scientific_name,
         total_population: input.total_population,
         image: input.image,
-      },
-    ]);
+      })
+      .eq("author", userId)
+      .eq("scientific_name", input.scientific_name)
+      .select();
+
+    // if user edits non-existent data or data they don't have ownership over, returns error
+    if (data) {
+      return toast({
+        title: "You cannot edit this information.",
+      });
+    }
 
     // Catch and report errors from Supabase and exit the onSubmit function with an early 'return' if an error occurred.
     if (error) {
@@ -125,8 +128,8 @@ export default function AddSpeciesDialog({ userId }: { userId: string }) {
     router.refresh();
 
     return toast({
-      title: "New species added!",
-      description: "Successfully added " + input.scientific_name + ".",
+      title: "Species Information updated!",
+      description: "Successfully updated " + input.scientific_name + ".",
     });
   };
 
@@ -135,14 +138,14 @@ export default function AddSpeciesDialog({ userId }: { userId: string }) {
       <DialogTrigger asChild>
         <Button variant="secondary">
           <Icons.add className="mr-3 h-5 w-5" />
-          Add Species
+          Edit Species
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-screen overflow-y-auto sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Add Species</DialogTitle>
+          <DialogTitle>Edit Species</DialogTitle>
           <DialogDescription>
-            Add a new species here. Click &quot;Add Species&quot; below when you&apos;re done.
+            Edit existing species here. Click &quot;Update Species&quot; below when you&apos;re done.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -187,7 +190,7 @@ export default function AddSpeciesDialog({ userId }: { userId: string }) {
                     <Select onValueChange={(value) => field.onChange(kingdoms.parse(value))} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select a kingdom" />
+                          <SelectValue placeholder="Select an existing animal" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -271,7 +274,7 @@ export default function AddSpeciesDialog({ userId }: { userId: string }) {
               />
               <div className="flex">
                 <Button type="submit" className="ml-1 mr-1 flex-auto">
-                  Add Species
+                  Update Species
                 </Button>
                 <DialogClose asChild>
                   <Button type="button" className="ml-1 mr-1 flex-auto" variant="secondary">
